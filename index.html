@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>VR 시기능 훈련 시스템 V18.1 (Mosquitto 보안 우회판)</title>
+  <title>VR 시기능 훈련 시스템 V18.2 (Shiftr.io 보안 우회판)</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
   <style>
@@ -178,14 +178,14 @@
     function activateAndConnect() {
       document.getElementById('bypass-btn').style.display = 'none';
       document.getElementById('wait-spinner').style.display = 'block';
-      document.getElementById('wait-msg').innerHTML = "핫스팟 방화벽 우회 터널 생성 중...";
+      document.getElementById('wait-msg').innerHTML = "대기업 보안 우회 관통 터널 개방 중...";
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
       initMQTT();
     }
     function initMQTT() {
-      // [V18.1] 핫스팟 프리패스 Mosquitto 전용 암호화 포트 적용
-      client = mqtt.connect('wss://test.mosquitto.org:8081/mqtt', {
+      // [V18.2] 통신사 방화벽이 차단할 수 없는 Shiftr 주소 및 퍼블릭 HTTPS 443 포트 결합 적용
+      client = mqtt.connect('wss://try:try@broker.shiftr.io:443', {
         connectTimeout: 5000,
         clientId: 'seongseo_' + mode + '_' + Math.random().toString(16).substr(2, 8),
         keepalive: 10,
@@ -196,14 +196,13 @@
         if (mode === 'admin') { client.subscribe(topic_state); document.getElementById('status-txt').innerText = "VR 기기 신호 대기 중..."; }
         else { client.subscribe(topic_cmd); }
       });
-      client.on('offline', () => { if(mode === 'vr') { document.getElementById('wait-msg').innerText = "신호 재구축 중..."; } });
+      client.on('offline', () => { if(mode === 'vr') { document.getElementById('wait-msg').innerText = "보안 터널 재연결 중..."; } });
       client.on('message', (topic, message) => {
         const data = JSON.parse(message.toString());
         if (topic === topic_cmd && mode === 'vr') handleAdminCommand(data);
         else if (topic === topic_state && mode === 'admin') handleVRState(data);
       });
     }
-    // ... (기존 핸들러 및 훈련 로직 동일하게 유지)
     function handleAdminCommand(data) { if (mode !== 'vr') return; if (data.type === 'config') { rowsCols = data.gridSize; redrawBackgroundGrid(); randomRange = data.range; rotationSpeed = data.speed; window.virtualTimeSetting = data.time; window.virtualEyeMode = data.eyeMode; window.virtualRunMode = data.runMode; window.virtualManualDir = data.manualDir; window.virtualAutoInterval = data.autoInterval; } else if (data.type === 'start') { document.getElementById('vr-wait-screen').style.display = 'none'; startFusionTrainingLocal(); } else if (data.type === 'stop') { exitVRModeManuallyLocal(); document.getElementById('vr-wait-screen').style.display = 'flex'; document.getElementById('wait-msg').innerText = "중단됨. 대기 중..."; } else if (data.type === 'reload') { location.reload(); } }
     function handleVRState(data) { if (mode !== 'admin') return; if (data.type === 'sync') { document.getElementById('val-score').innerText = data.score.toString().padStart(4, '0'); document.getElementById('val-time').innerText = data.timeLeft; document.getElementById('active-eye-txt').innerText = data.activeEyeTxt; document.getElementById('active-eye-txt').style.color = data.activeEyeColor; document.getElementById('status-txt').innerText = data.statusTxt; let dirTxt = "우측 이동"; if(data.manualDir === "left") dirTxt = "좌측 이동"; else if(data.manualDir === "up") dirTxt = "상측 이동"; else if(data.manualDir === "down") dirTxt = "하측 이동"; else if(data.manualDir === "clockwise") dirTxt = "시계 회전"; else if(data.manualDir === "counterclockwise") dirTxt = "반시계 회전"; document.getElementById('active-pattern-txt').innerText = dirTxt; if(data.isTrainingActiveLocal) { isTrainingActive = true; rotX = data.rx; rotY = data.ry; rotZ = data.rz; const sky = document.getElementById('rotating-bg'); if (sky) sky.setAttribute('rotation', `${rotX} ${rotY} ${rotZ}`); const magicBoard = document.getElementById('magic-eye-board'); magicBoard.setAttribute('visible', 'true'); const bLeft = document.getElementById('balloon-left'); const bRight = document.getElementById('balloon-right'); if(data.activeTurnLocal === "left") { bLeft.setAttribute('visible', 'true'); bRight.setAttribute('visible', 'false'); bLeft.setAttribute('position', `${data.cx} ${data.cy} ${data.cz}`); } else { bLeft.setAttribute('visible', 'false'); bRight.setAttribute('visible', 'true'); bRight.setAttribute('position', `${data.cx} ${data.cy} ${data.cz}`); } } } else if (data.type === 'finish') { isTrainingActive = false; document.getElementById('magic-eye-board').setAttribute('visible', 'false'); document.getElementById('modal-final-score').innerText = data.score; document.getElementById('result-modal').style.display = 'block'; } }
     function sendConfigToVR() { if (mode !== 'admin') return; const payload = { type: 'config', time: document.getElementById('training-time-select').value, eyeMode: document.getElementById('eye-mode-select').value, runMode: document.getElementById('run-mode-select').value, manualDir: document.getElementById('manual-dir-select').value, autoInterval: document.getElementById('auto-interval-select').value, gridSize: parseInt(document.getElementById('grid-size-slider').value), range: parseFloat(document.getElementById('range-slider').value), speed: parseInt(document.getElementById('bg-speed-slider').value) }; if(client && client.connected) client.publish(topic_cmd, JSON.stringify(payload)); rowsCols = payload.gridSize; redrawBackgroundGrid(); }

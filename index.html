@@ -2,25 +2,22 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>VR 시기능 훈련 시스템 V17.4 (메타 포트 보정판)</title>
+  <title>VR 시기능 훈련 시스템 V17.5</title>
   <!-- A-Frame VR 엔진 -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <!-- 실시간 무선 신호 전달을 위한 MQTT 라이브러리 -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+  <!-- 메타 브라우저 차단 방지를 위한 MQTT 표준 백업 라이브러리 교체 -->
+  <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Malgun Gothic', sans-serif; user-select: none; }
     
-    /* body 전체를 플렉스 박스로 선언 */
     body.admin-mode { display: flex; flex-direction: row; height: 100vh; width: 100vw; }
     
-    /* 관리자 모드일 때 왼쪽 조종 패널 구역 */
     #admin-sidebar {
       width: 360px; height: 100vh; background: #0b0f1a; color: white;
       padding: 20px; box-sizing: border-box; display: none; flex-direction: column;
       border-right: 2px solid #1e293b; z-index: 99999; overflow-y: auto; position: relative;
     }
     
-    /* A-Frame 캔버스의 위치를 CSS로 오른쪽 영역에 고정 */
     body.admin-mode a-scene {
       position: relative !important; flex: 1 !important; height: 100vh !important; width: auto !important; display: block !important;
     }
@@ -34,20 +31,13 @@
     .btn { width: 100%; padding: 12px; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 5px; font-size: 14px; }
     #start-btn { background: #22c55e; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3); }
     
-    /* 실시간 스코어 현황판 */
     #score-board { 
       background: rgba(15, 23, 42, 0.95); color: #fff; padding: 15px; 
       border-radius: 10px; border: 2px solid #38bdf8; font-size: 13px; margin-bottom: 12px;
     }
     .board-status { color: #ef4444; font-family: monospace; font-size: 18px; font-weight: bold; margin-bottom: 8px; }
     .exit-vr-btn { width: 100%; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 6px; font-weight: bold; cursor: pointer; font-size: 11px; margin-top: 8px; display: block; }
-    
-    .history-container { margin-top: 10px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; height: 150px; overflow-y: auto; padding: 5px; }
-    .history-item { font-family: monospace; font-size: 11px; border-bottom: 1px solid #1e293b; padding: 4px 2px; color: #cbd5e1; line-height: 1.3; }
-    .history-item.success { color: #4ade80; }
-    .history-item.fail { color: #f87171; }
 
-    /* 훈련자(VR) 모드 전용 무선 연결 대기 화면 */
     #vr-wait-screen {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: #070a12; color: #38bdf8; z-index: 999999;
@@ -62,12 +52,10 @@
     #result-modal .final-score { font-size: 42px; color: #eab308; margin: 20px 0; font-weight: bold; }
     #result-modal .reset-btn { background: #38bdf8; color: #000; padding: 10px 25px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
     
-    /* VR 모드일 때 전체화면 꽉 채우기 클래스 */
     .full-scene-vr { position: absolute !important; top: 0; left: 0; width: 100vw !important; height: 100vh !important; }
   </style>
   
   <script>
-    // 눈 레이어 분리 컴포넌트
     AFRAME.registerComponent('stereo-eye-lock', {
       schema: { eye: {type: 'string', default: 'both'} },
       init: function () {
@@ -84,7 +72,6 @@
       }
     });
 
-    // 백그라운드 멈춤 방지 루프 매니저
     AFRAME.registerComponent('vr-loop-manager', {
       tick: function (time, timeDelta) {
         if (typeof window.checkTargetGazeIntersectionInternal === 'function') {
@@ -111,8 +98,7 @@
       <div style="font-weight: bold; margin-bottom: 6px;">점수: <span id="val-score" style="color:#22c55e;">0000</span></div>
       <div style="color: #a7f3d0; font-size: 11px;" id="status-txt">훈련 신호 대기 중...</div>
       
-      <div style="margin-top: 10px; font-size: 11px; font-weight: bold; color: #94a3b8; border-top: 1px solid #334155; padding-top: 6px;">📋 실시간 훈련 기록 (최신순)</div>
-      <div class="history-container" id="history-log"></div>
+      <!-- 훈련 기록 로그 레이아웃 원천 삭제 완료 -->
       <button id="exit-vr-control" class="exit-vr-btn" onclick="sendStopCommand()">🔴 원격 훈련 중단</button>
     </div>
 
@@ -248,13 +234,24 @@
       document.getElementById('right-eye-container').setAttribute('stereo-eye-lock', 'eye: both');
     } else {
       sceneEl.classList.add('full-scene-vr');
-      document.getElementById('admin-sidebar').parentNode.removeChild(document.getElementById('admin-sidebar'));
+      if(document.getElementById('admin-sidebar')) {
+        document.getElementById('admin-sidebar').parentNode.removeChild(document.getElementById('admin-sidebar'));
+      }
       document.getElementById('vr-wait-screen').style.display = 'flex';
     }
 
     function initMQTT() {
-      // [메타 브라우저 보안 보정] 8000번 포트 대신 안전한 표준 보안 443 포트로 주소 긴급 전면 수정
-      client = mqtt.connect('wss://broker.hivemq.com:443/mqtt');
+      // 메타퀘스트 브라우저 웹소켓 프로토콜 매칭 고도화 (호환성 높은 표준 양식으로 지정)
+      try {
+        client = mqtt.connect('wss://broker.hivemq.com:443/mqtt', {
+          connectTimeout: 4000,
+          clientId: 'seongseo_' + mode + '_' + Math.random().toString(16).substr(2, 8),
+          keepalive: 60
+        });
+      } catch(e) {
+        console.error("MQTT 연결 초기화 실패:", e);
+        return;
+      }
       
       client.on('connect', () => {
         console.log("무선 통신 서버 연결 완료");
@@ -269,13 +266,20 @@
       });
 
       client.on('message', (topic, message) => {
-        const data = JSON.parse(message.toString());
-        
-        if (topic === topic_cmd && mode === 'vr') {
-          handleAdminCommand(data);
-        } else if (topic === topic_state && mode === 'admin') {
-          handleVRState(data);
+        try {
+          const data = JSON.parse(message.toString());
+          if (topic === topic_cmd && mode === 'vr') {
+            handleAdminCommand(data);
+          } else if (topic === topic_state && mode === 'admin') {
+            handleVRState(data);
+          }
+        } catch(e) {
+          console.log("데이터 파싱 실패", e);
         }
+      });
+
+      client.on('error', (err) => {
+        console.log("무선 신호 오류 발각:", err);
       });
     }
 
@@ -348,13 +352,6 @@
           }
         }
       } 
-      else if (data.type === 'log') {
-        const logContainer = document.getElementById('history-log');
-        const logItem = document.createElement('div');
-        logItem.className = `history-item ${data.status === '성공' ? 'success' : 'fail'}`;
-        logItem.innerText = data.text;
-        logContainer.insertBefore(logItem, logContainer.firstChild);
-      }
       else if (data.type === 'finish') {
         isTrainingActive = false;
         document.getElementById('magic-eye-board').setAttribute('visible', 'false');
@@ -376,25 +373,25 @@
         range: parseFloat(document.getElementById('range-slider').value),
         speed: parseInt(document.getElementById('bg-speed-slider').value)
       };
-      client.publish(topic_cmd, JSON.stringify(payload));
+      if(client && client.connected) client.publish(topic_cmd, JSON.stringify(payload));
       rowsCols = payload.gridSize; redrawBackgroundGrid();
     }
 
     function sendStartCommand() {
       sendConfigToVR();
-      client.publish(topic_cmd, JSON.stringify({type: 'start'}));
+      if(client && client.connected) client.publish(topic_cmd, JSON.stringify({type: 'start'}));
       isTrainingActive = true;
       document.getElementById('magic-eye-board').setAttribute('visible', 'true');
     }
 
     function sendStopCommand() {
-      client.publish(topic_cmd, JSON.stringify({type: 'stop'}));
+      if(client && client.connected) client.publish(topic_cmd, JSON.stringify({type: 'stop'}));
       isTrainingActive = false;
       document.getElementById('magic-eye-board').setAttribute('visible', 'false');
     }
 
     function sendReloadCommand() {
-      client.publish(topic_cmd, JSON.stringify({type: 'reload'}));
+      if(client && client.connected) client.publish(topic_cmd, JSON.stringify({type: 'reload'}));
       setTimeout(() => { location.reload(); }, 300);
     }
 
@@ -458,7 +455,7 @@
     }
 
     function transmitStateToAdmin() {
-      if (mode !== 'vr') return;
+      if (mode !== 'vr' || !client || !client.connected) return;
       
       let timeMin = Math.floor((targetSeconds - totalSecondsElapsed) / 60).toString().padStart(2, '0');
       let timeSec = ((targetSeconds - totalSecondsElapsed) % 60).toString().padStart(2, '0');
@@ -489,19 +486,6 @@
         rx: rotX, ry: rotY, rz: rotZ
       };
       client.publish(topic_state, JSON.stringify(payload));
-    }
-
-    function addHistoryLog(status, activeEye, typeMode) {
-      if (mode !== 'vr') return;
-      const now = new Date();
-      const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
-      let eyeTag = "OU";
-      if(typeMode === "leftOnly") eyeTag = "L";
-      else if(typeMode === "rightOnly") eyeTag = "R";
-      else { eyeTag = (activeEye === "left") ? "L" : "R"; }
-
-      const logText = `[${timeStr}] [${eyeTag}] 풍선 주시 고정 - ${status}`;
-      client.publish(topic_state, JSON.stringify({ type: 'log', status: status, text: logText }));
     }
 
     function renderRandomTargetsOnly() {
@@ -602,8 +586,6 @@
       } else {
         if (gazeTimer) {
           clearTimeout(gazeTimer); gazeTimer = null;
-          const eyeMode = window.virtualEyeMode;
-          addHistoryLog("실패", activeTurn, eyeMode);
           transmitStateToAdmin();
         }
       }
@@ -612,11 +594,9 @@
     function popTargetSuccess() {
       playPopSound(); 
       score += 1000;
-      const eyeMode = window.virtualEyeMode;
-      addHistoryLog("성공", activeTurn, eyeMode);
       triggerParticlesEmission(currentX, currentY, currentZ, 30); 
       
-      if (eyeMode === "alternating") {
+      if (window.virtualEyeMode === "alternating") {
         activeTurn = (activeTurn === "left") ? "right" : "left";
       }
       document.getElementById('magic-eye-board').setAttribute('visible', 'false');
@@ -684,7 +664,9 @@
       isTrainingActive = false;
       document.getElementById('magic-eye-board').setAttribute('visible', 'false');
       
-      client.publish(topic_state, JSON.stringify({type: 'finish', score: score}));
+      if(client && client.connected) {
+        client.publish(topic_state, JSON.stringify({type: 'finish', score: score}));
+      }
 
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];

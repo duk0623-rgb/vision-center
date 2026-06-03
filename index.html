@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>VR 시기능 훈련 시스템 V17.3 (완벽 동기화 보정판)</title>
+  <title>VR 시기능 훈련 시스템 V17.4 (메타 포트 보정판)</title>
   <!-- A-Frame VR 엔진 -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <!-- 실시간 무선 신호 전달을 위한 MQTT 라이브러리 -->
@@ -10,7 +10,7 @@
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Malgun Gothic', sans-serif; user-select: none; }
     
-    /* [구조 혁신] 엔진 충돌을 막기 위해 body 전체를 플렉스 박스로 선언 */
+    /* body 전체를 플렉스 박스로 선언 */
     body.admin-mode { display: flex; flex-direction: row; height: 100vh; width: 100vw; }
     
     /* 관리자 모드일 때 왼쪽 조종 패널 구역 */
@@ -20,7 +20,7 @@
       border-right: 2px solid #1e293b; z-index: 99999; overflow-y: auto; position: relative;
     }
     
-    /* [버그 수정] A-Frame 캔버스의 위치를 조작하지 않고 CSS로 오른쪽 영역에 고정 */
+    /* A-Frame 캔버스의 위치를 CSS로 오른쪽 영역에 고정 */
     body.admin-mode a-scene {
       position: relative !important; flex: 1 !important; height: 100vh !important; width: auto !important; display: block !important;
     }
@@ -194,7 +194,7 @@
     <button class="reset-btn" onclick="sendReloadCommand()">확인 (전체 리셋)</button>
   </div>
 
-  <!-- 3D 그래픽 연출 공간 (조종자 모드에선 오른쪽 자동 배치, VR 모드에선 전체 화면) -->
+  <!-- 3D 그래픽 연출 공간 -->
   <a-scene id="vr-scene" background="color: #000000" vr-mode-ui="enabled: true" vr-loop-manager>
     <a-assets>
       <canvas id="bgCheckerCanvas" width="512" height="512"></canvas>
@@ -240,12 +240,10 @@
 
     const sceneEl = document.getElementById('vr-scene');
 
-    // [버그 대수정] 레이아웃 재배치 알고리즘의 안정화 처리
     if (mode === 'admin') {
       document.body.classList.add('admin-mode');
       document.getElementById('admin-sidebar').style.display = 'flex';
       
-      // 관리자 화면에서는 좌/우 눈 분리를 해제하여 치료사가 모니터로 양안 타겟을 한 번에 보게 함
       document.getElementById('left-eye-container').setAttribute('stereo-eye-lock', 'eye: both');
       document.getElementById('right-eye-container').setAttribute('stereo-eye-lock', 'eye: both');
     } else {
@@ -255,7 +253,8 @@
     }
 
     function initMQTT() {
-      client = mqtt.connect('wss://broker.hivemq.com:8000/mqtt');
+      // [메타 브라우저 보안 보정] 8000번 포트 대신 안전한 표준 보안 443 포트로 주소 긴급 전면 수정
+      client = mqtt.connect('wss://broker.hivemq.com:443/mqtt');
       
       client.on('connect', () => {
         console.log("무선 통신 서버 연결 완료");
@@ -307,7 +306,6 @@
       }
     }
 
-    // 컴퓨터 제어판 동기화 센터 (관리자 전용)
     function handleVRState(data) {
       if (mode !== 'admin') return;
       if (data.type === 'sync') {
@@ -317,7 +315,6 @@
         document.getElementById('active-eye-txt').style.color = data.activeEyeColor;
         document.getElementById('status-txt').innerText = data.statusTxt;
         
-        // 문구 표출 동기화
         let dirTxt = "우측 이동";
         if(data.manualDir === "left") dirTxt = "좌측 이동";
         else if(data.manualDir === "up") dirTxt = "상측 이동";
@@ -332,12 +329,10 @@
           window.virtualManualDir = data.manualDir;
           rotationSpeed = data.speed;
           
-          // [버그 수정] 배경 회전 각도값 실시간 원격 강제 동기화
           rotX = data.rx; rotY = data.ry; rotZ = data.rz;
           const sky = document.getElementById('rotating-bg');
           if (sky) sky.setAttribute('rotation', `${rotX} ${rotY} ${rotZ}`);
           
-          // 풍선 위치 실시간 3D 동기화 복제
           const magicBoard = document.getElementById('magic-eye-board');
           magicBoard.setAttribute('visible', 'true');
           
@@ -491,7 +486,7 @@
         manualDir: window.virtualManualDir,
         speed: rotationSpeed,
         cx: currentX, cy: currentY, cz: currentZ,
-        rx: rotX, ry: rotY, rz: rotZ // 배경의 삼차원 회전 각도 데이터 추가 전달
+        rx: rotX, ry: rotY, rz: rotZ
       };
       client.publish(topic_state, JSON.stringify(payload));
     }
@@ -634,10 +629,8 @@
     }
 
     window.animateBackgroundScrollInternal = function() {
-      // 훈련자 모드이거나, 관리자 모드에서 시뮬레이션이 활성화되었을 때만 회전시킴
       if (!isTrainingActive) return;
       
-      // 관리자 모드일 때는 무선으로 동기화된 각도값을 그대로 받아 표현하므로 수동 회전은 VR 모드에서만 수행
       if (mode === 'vr') {
         const runMode = window.virtualRunMode;
         let activeBgDirection = "right";
